@@ -37,7 +37,7 @@ dependencies {
     implementation 'org.springframework.cloud:spring-cloud-starter-stream-kafka:3.0.6.RELEASE'
     implementation 'org.springframework.retry:spring-retry'
 
-    implementation 'com.nimbusds:nimbus-jose-jwt:6.7'
+    implementation 'com.nimbusds:nimbus-jose-jwt:6.8'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
