@@ -199,7 +199,7 @@ services:
       - KAFKA_ADVERTISED_HOST_NAME=zookeeper
 
   zipkin:
-    image: openzipkin/zipkin:2.12.9
+    image: openzipkin/zipkin:2.27.1
     mem_limit: 512m
     networks:
       - my-network
