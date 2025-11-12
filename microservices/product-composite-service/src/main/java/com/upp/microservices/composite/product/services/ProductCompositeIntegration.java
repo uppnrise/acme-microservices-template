@@ -17,9 +17,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.stream.annotation.EnableBinding;
-import org.springframework.cloud.stream.annotation.Output;
-import org.springframework.messaging.MessageChannel;
+import org.springframework.cloud.stream.function.StreamBridge;
+import org.springframework.http.HttpStatus;
+import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -36,11 +36,14 @@ import static com.upp.api.event.Event.Type.CREATE;
 import static com.upp.api.event.Event.Type.DELETE;
 import static reactor.core.publisher.Flux.empty;
 
-@EnableBinding(ProductCompositeIntegration.MessageSources.class)
 @Component
 public class ProductCompositeIntegration implements ProductService, RecommendationService, ReviewService {
 
     private static final Logger LOG = LoggerFactory.getLogger(ProductCompositeIntegration.class);
+
+    private static final String OUTPUT_PRODUCTS = "products-out-0";
+    private static final String OUTPUT_RECOMMENDATIONS = "recommendations-out-0";
+    private static final String OUTPUT_REVIEWS = "reviews-out-0";
 
     private final String productServiceUrl = "http://product";
     private final String recommendationServiceUrl = "http://recommendation";
@@ -48,37 +51,22 @@ public class ProductCompositeIntegration implements ProductService, Recommendati
 
     private final ObjectMapper mapper;
     private final WebClient.Builder webClientBuilder;
+    private final StreamBridge streamBridge;
 
     private WebClient webClient;
-    private final MessageSources messageSources;
 
     private final int productServiceTimeoutSec;
-
-    public interface MessageSources {
-        String OUTPUT_PRODUCTS = "output-products";
-        String OUTPUT_RECOMMENDATIONS = "output-recommendations";
-        String OUTPUT_REVIEWS = "output-reviews";
-
-        @Output(OUTPUT_PRODUCTS)
-        MessageChannel outputProducts();
-
-        @Output(OUTPUT_RECOMMENDATIONS)
-        MessageChannel outputRecommendations();
-
-        @Output(OUTPUT_REVIEWS)
-        MessageChannel outputReviews();
-    }
 
     @Autowired
     public ProductCompositeIntegration(
             WebClient.Builder webClientBuilder,
             ObjectMapper mapper,
-            MessageSources messageSources,
+            StreamBridge streamBridge,
             @Value("${app.product-service.timeoutSec}") int productServiceTimeoutSec
     ) {
         this.webClientBuilder = webClientBuilder;
         this.mapper = mapper;
-        this.messageSources = messageSources;
+        this.streamBridge = streamBridge;
         this.productServiceTimeoutSec = productServiceTimeoutSec;
     }
 
@@ -100,13 +88,13 @@ public class ProductCompositeIntegration implements ProductService, Recommendati
 
     @Override
     public Product createProduct(Product body) {
-        messageSources.outputProducts().send(MessageBuilder.withPayload(new Event(CREATE, body.getProductId(), body)).build());
+        sendMessage(OUTPUT_PRODUCTS, new Event(CREATE, body.getProductId(), body));
         return body;
     }
 
     @Override
     public void deleteProduct(int productId) {
-        messageSources.outputProducts().send(MessageBuilder.withPayload(new Event(DELETE, productId, null)).build());
+        sendMessage(OUTPUT_PRODUCTS, new Event(DELETE, productId, null));
     }
 
     @Override
@@ -125,13 +113,13 @@ public class ProductCompositeIntegration implements ProductService, Recommendati
 
     @Override
     public Recommendation createRecommendation(Recommendation body) {
-        messageSources.outputRecommendations().send(MessageBuilder.withPayload(new Event(CREATE, body.getProductId(), body)).build());
+        sendMessage(OUTPUT_RECOMMENDATIONS, new Event(CREATE, body.getProductId(), body));
         return body;
     }
 
     @Override
     public void deleteRecommendations(int productId) {
-        messageSources.outputRecommendations().send(MessageBuilder.withPayload(new Event(DELETE, productId, null)).build());
+        sendMessage(OUTPUT_RECOMMENDATIONS, new Event(DELETE, productId, null));
     }
 
     @Override
@@ -150,13 +138,19 @@ public class ProductCompositeIntegration implements ProductService, Recommendati
 
     @Override
     public Review createReview(Review body) {
-        messageSources.outputReviews().send(MessageBuilder.withPayload(new Event(CREATE, body.getProductId(), body)).build());
+        sendMessage(OUTPUT_REVIEWS, new Event(CREATE, body.getProductId(), body));
         return body;
     }
 
     @Override
     public void deleteReviews(int productId) {
-        messageSources.outputReviews().send(MessageBuilder.withPayload(new Event(DELETE, productId, null)).build());
+        sendMessage(OUTPUT_REVIEWS, new Event(DELETE, productId, null));
+    }
+
+    private void sendMessage(String bindingName, Event event) {
+        LOG.debug("Sending a {} message to {}", event.getEventType(), bindingName);
+        Message<Event> message = MessageBuilder.withPayload(event).build();
+        streamBridge.send(bindingName, message);
     }
 
     private WebClient getWebClient() {
@@ -174,19 +168,25 @@ public class ProductCompositeIntegration implements ProductService, Recommendati
         }
 
         WebClientResponseException wcre = (WebClientResponseException)ex;
+        HttpStatus statusCode = HttpStatus.resolve(wcre.getStatusCode().value());
 
-        switch (wcre.getStatusCode()) {
-            case NOT_FOUND:
-                return new NotFoundException(getErrorMessage(wcre));
+        if (statusCode != null) {
+            switch (statusCode) {
+                case NOT_FOUND:
+                    return new NotFoundException(getErrorMessage(wcre));
 
-            case UNPROCESSABLE_ENTITY :
-                return new InvalidInputException(getErrorMessage(wcre));
+                case UNPROCESSABLE_ENTITY:
+                    return new InvalidInputException(getErrorMessage(wcre));
 
-            default:
-                LOG.warn("Got a unexpected HTTP error: {}, will rethrow it", wcre.getStatusCode());
-                LOG.warn("Error body: {}", wcre.getResponseBodyAsString());
-                return ex;
+                default:
+                    LOG.warn("Got an unexpected HTTP error: {}, will rethrow it", statusCode);
+                    LOG.warn("Error body: {}", wcre.getResponseBodyAsString());
+                    return ex;
+            }
         }
+        
+        LOG.warn("Got an unexpected HTTP error with unknown status code, will rethrow it");
+        return ex;
     }
 
     private String getErrorMessage(WebClientResponseException ex) {

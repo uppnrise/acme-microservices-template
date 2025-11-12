@@ -3,7 +3,7 @@ package com.upp.microservices.core.review.persistence;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 
 import static java.lang.String.format;
 
