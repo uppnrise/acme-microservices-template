@@ -1,25 +1,16 @@
-buildscript {
-    ext {
-        springBootVersion = '2.3.2.RELEASE'
-    }
-    repositories {
-        mavenCentral()
-    }
-    dependencies {
-        classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
-    }
-}
-
 plugins {
-    id "io.spring.dependency-management" version "1.0.9.RELEASE"
+    id 'java'
+    id 'eclipse'
+    id "io.spring.dependency-management" version "1.1.4"
 }
-
-apply plugin: 'java'
-apply plugin: 'eclipse'
 
 group = 'com.upp.microservice.api'
 version = '1.0.0-SNAPSHOT'
-sourceCompatibility = 1.8
+sourceCompatibility = '17'
+
+ext {
+    springBootVersion = '3.2.1'
+}
 
 repositories {
     mavenCentral()
@@ -27,14 +18,14 @@ repositories {
 
 dependencies {
     implementation('org.springframework.boot:spring-boot-starter-webflux')
-    implementation('io.springfox:springfox-swagger2:3.0.0')
+    implementation('org.springdoc:springdoc-openapi-starter-webflux-ui:2.3.0')
     testImplementation('org.springframework.boot:spring-boot-starter-test')
 
-    compileOnly 'org.projectlombok:lombok:1.18.16'
-    annotationProcessor 'org.projectlombok:lombok:1.18.16'
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
 
-    testCompileOnly 'org.projectlombok:lombok:1.18.16'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.16'
+    testCompileOnly 'org.projectlombok:lombok:1.18.30'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
 }
 
 dependencyManagement {
