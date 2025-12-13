@@ -1,4 +1,4 @@
-FROM azul/zulu-openjdk:11
+FROM azul/zulu-openjdk:25.0.1
 
 EXPOSE 8761
 
